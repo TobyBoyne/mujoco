@@ -16,6 +16,7 @@
 #include "bowl.h"
 #include "gear.h"
 #include "nut.h"
+#include "ring.h"
 #include "torus.h"
 
 namespace mujoco::plugin::sdf {
@@ -25,6 +26,7 @@ mjPLUGIN_LIB_INIT {
   Bowl::RegisterPlugin();
   Gear::RegisterPlugin();
   Nut::RegisterPlugin();
+  Ring::RegisterPlugin();
   Torus::RegisterPlugin();
 }
 

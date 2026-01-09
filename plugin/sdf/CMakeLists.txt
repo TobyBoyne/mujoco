@@ -28,6 +28,8 @@ set(MUJOCO_SDF_SRCS
     register.cc
     nut.cc
     nut.h
+    ring.cc
+    ring.h
     torus.cc
     torus.h
 )
