@@ -21,82 +21,93 @@
 #include <mujoco/mujoco.h>
 #include "sdf.h"
 #include "ring.h"
+#include "nlobe.h"
 
 namespace mujoco::plugin::sdf {
 namespace {
 
-static mjtNum distance(const mjtNum p[3], const mjtNum attributes[3]) {
-  mjtNum midpoint = 0.5 * (attributes[0] + attributes[1]);
-  mjtNum thickness = attributes[0] - attributes[1];
-  mjtNum pxy[2] = {p[0], p[1]};
-  mjtNum sdf_circle = mju_norm(pxy, 2) - midpoint;
-  mjtNum sdf_ring_2d = Onion(sdf_circle, thickness);
-  return Extrude(p, sdf_ring_2d, attributes[2]);
+static mjtNum ring(const mjtNum p[3], const mjtNum radius[2]) {
+  // length(xz) == p[0]**2 + p[1]**2
+  // mjtNum q = mju_sqrt(p[0]*p[0] + p[1]*p[1]) - radius[0];
+  mjtNum midpoint = 0.5 * (radius[0] + radius[1]);
+  mjtNum thickness = radius[0] - radius[1];
+  mjtNum dr = mju_sqrt(p[0]*p[0] + p[1]*p[1]) - midpoint;
+  // TODO: correct this
+  mjtNum dy = abs(p[2]) - 0.5;
+  // create the sdf, then 'onion'
+  // return mju_sqrt(q*q + p[2]*p[2]) - radius[1];
+  mjtNum nlobe_sdf = mju_min(mju_max(dr, dy), 0.0) + mju_sqrt(mju_max(dr, 0.0)* mju_max(dr, 0.0) + mju_max(dy, 0.0) * mju_max(dy, 0.0));
+  return abs(nlobe_sdf) - thickness;
+}
+
+static mjtNum distance(const mjtNum p[3], const mjtNum radius[2]) {
+  mjtNum central_ring = ring(p, Ring.Create());
+  return ring(p, radius);
 }
 
 }  // namespace
 
 // factory function
-std::optional<Ring> Ring::Create(
+std::optional<NLobe> NLobe::Create(
     const mjModel* m, mjData* d, int instance) {
   if (CheckAttr("radius1", m, instance) && CheckAttr("radius2", m, instance)) {
-    return Ring(m, d, instance);
+    return NLobe(m, d, instance);
   } else {
-    mju_warning("Invalid radius1 or radius2 parameters in Ring plugin");
+    mju_warning("Invalid radius1 or radius2 parameters in NLobe plugin");
     return std::nullopt;
   }
 }
 
 // plugin constructor
-Ring::Ring(const mjModel* m, mjData* d, int instance) {
-  SdfDefault<RingAttribute> defattribute;
+NLobe::NLobe(const mjModel* m, mjData* d, int instance) {
+  SdfDefault<NLobeAttribute> defattribute;
 
-  for (int i=0; i < RingAttribute::nattribute; i++) {
+  for (int i=0; i < NLobeAttribute::nattribute; i++) {
     attribute[i] = defattribute.GetDefault(
-        RingAttribute::names[i],
-        mj_getPluginConfig(m, instance, RingAttribute::names[i]));
+        NLobeAttribute::names[i],
+        mj_getPluginConfig(m, instance, NLobeAttribute::names[i]));
   }
 }
 
 // sdf
-mjtNum Ring::Distance(const mjtNum point[3]) const {
+mjtNum NLobe::Distance(const mjtNum point[3]) const {
   return distance(point, attribute);
 }
 
 // gradient of sdf
-void Ring::Gradient(mjtNum grad[3], const mjtNum p[3]) const {
-  // mjtNum midpoint = 0.5 * (attributes[0] + attributes[1]);
-  // mjtNum thickness = attributes[0] - attributes[1];
-  // mjtNum pxy[2] = {p[0], p[1]};
-  // mjtNum circle_sdf = mju_norm(pxy, 2) - midpoint;
-  // gradOnion(circle_sdf, grad)
-  
-
+void NLobe::Gradient(mjtNum grad[3], const mjtNum p[3]) const {
+  mjtNum len_xy = mju_sqrt(p[0]*p[0] + p[1]*p[1]);
+  mjtNum q = len_xy - attribute[0];
+  mjtNum grad_q[2] = { p[0] / len_xy, p[1] / len_xy };
+  mjtNum len_qz = mju_sqrt(q*q + p[2]*p[2]);
+  grad[0] = q*grad_q[0] / mjMAX(len_qz, mjMINVAL);
+  grad[1] = q*grad_q[1] / mjMAX(len_qz, mjMINVAL);
+  grad[2] = p[2] / mjMAX(len_qz, mjMINVAL);
 }
 
 // plugin registration
-void Ring::RegisterPlugin() {
+void NLobe::RegisterPlugin() {
   mjpPlugin plugin;
   mjp_defaultPlugin(&plugin);
 
-  plugin.name = "mujoco.sdf.ring";
+  plugin.name = "mujoco.sdf.nlobe";
   plugin.capabilityflags |= mjPLUGIN_SDF;
 
-  plugin.nattribute = RingAttribute::nattribute;
-  plugin.attributes = RingAttribute::names;
+  plugin.nattribute = NLobeAttribute::nattribute;
+  plugin.attributes = NLobeAttribute::names;
   plugin.nstate = +[](const mjModel* m, int instance) { return 0; };
 
   plugin.init = +[](const mjModel* m, mjData* d, int instance) {
-    auto sdf_or_null = Ring::Create(m, d, instance);
+    auto sdf_or_null = NLobe::Create(m, d, instance);
     if (!sdf_or_null.has_value()) {
       return -1;
     }
     d->plugin_data[instance] = reinterpret_cast<uintptr_t>(
-        new Ring(std::move(*sdf_or_null)));
+        new NLobe(std::move(*sdf_or_null)));
     return 0;
   };
   plugin.destroy = +[](mjData* d, int instance) {
-    delete reinterpret_cast<Ring*>(d->plugin_data[instance]);
+    delete reinterpret_cast<NLobe*>(d->plugin_data[instance]);
     d->plugin_data[instance] = 0;
   };
   plugin.reset = +[](const mjModel* m, mjtNum* plugin_state, void* plugin_data,
@@ -109,12 +120,12 @@ void Ring::RegisterPlugin() {
       };
   plugin.sdf_distance =
       +[](const mjtNum point[3], const mjData* d, int instance) {
-        auto* sdf = reinterpret_cast<Ring*>(d->plugin_data[instance]);
+        auto* sdf = reinterpret_cast<NLobe*>(d->plugin_data[instance]);
         return sdf->Distance(point);
       };
   plugin.sdf_gradient = +[](mjtNum gradient[3], const mjtNum point[3],
                         const mjData* d, int instance) {
-    auto* sdf = reinterpret_cast<Ring*>(d->plugin_data[instance]);
+    auto* sdf = reinterpret_cast<NLobe*>(d->plugin_data[instance]);
     sdf->Gradient(gradient, point);
   };
   plugin.sdf_staticdistance =
@@ -129,7 +140,7 @@ void Ring::RegisterPlugin() {
       };
   plugin.sdf_attribute =
       +[](mjtNum attribute[], const char* name[], const char* value[]) {
-        SdfDefault<RingAttribute> defattribute;
+        SdfDefault<NLobeAttribute> defattribute;
         defattribute.GetDefaults(attribute, name, value);
       };
 

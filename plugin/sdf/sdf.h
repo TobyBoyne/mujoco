@@ -40,6 +40,49 @@ inline mjtNum Fract(mjtNum x) {
   return x - floor(x);
 }
 
+inline mjtNum Onion(mjtNum S, mjtNum t) {
+  return abs(S) - t;
+}
+
+inline mjtNum gradOnion(mjtNum grad[3], mjtNum S, mjtNum t) {
+  // Multiply the xy components by the sign of the SDF
+  grad[0] = grad[0] * mju_sign(S);
+  grad[1] = grad[1] * mju_sign(S);
+  return abs(S) - t;
+}
+
+inline mjtNum Extrude(const mjtNum p[3], mjtNum S, mjtNum h) {
+    mjtNum w[2] = { S, abs(p[2]) - h };
+    mjtNum w_abs[2] = { mju_max(w[0], 0), mju_max(w[1], 0) };
+    return mju_min(mju_max(w[0], w[1]), 0.) + mju_norm(w_abs, 2);
+}
+
+inline mjtNum gradExtrude(const mjtNum p[3], mjtNum grad[3], mjtNum S, mjtNum h) {
+  mjtNum w[2] = { S, abs(p[2]) - h };
+  mjtNum w_abs[2] = { mju_max(w[0], 0), mju_max(w[1], 0) };
+
+  mjtNum gd = mju_max(S, w[1]);
+  mjtNum d_gd[3] = {
+    S > w[1] ? grad[0] : 0.0,
+    S > w[1] ? grad[1] : 0.0,
+    S > w[1] ? 0.0     : mju_sign(p[2]),
+  };
+
+  mjtNum pos_gd = gd < 0;
+  mju_scl3(d_gd, d_gd, pos_gd);
+
+  mjtNum ell = mju_norm(w_abs, 2);
+  mjtNum d_ell[3] = {
+    S > 0 ? grad[0] * w_abs[0] / ell : 0.0,
+    S > 0 ? grad[1] * w_abs[0] / ell : 0.0,
+    w[1] > 0 ? mju_sign(p[2]) * w_abs[1] / ell : 0.0,
+  };
+
+  mju_add(grad, d_gd, d_ell, 3);
+  return mju_min(mju_max(w[0], w[1]), 0.) + ell;
+}
+
+
 // reads numeric attributes
 bool CheckAttr(const char* name, const mjModel* m, int instance);
 
