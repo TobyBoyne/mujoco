@@ -26,24 +26,42 @@
 namespace mujoco::plugin::sdf {
 namespace {
 
-static mjtNum ring(const mjtNum p[3], const mjtNum radius[2]) {
-  // length(xz) == p[0]**2 + p[1]**2
-  // mjtNum q = mju_sqrt(p[0]*p[0] + p[1]*p[1]) - radius[0];
-  mjtNum midpoint = 0.5 * (radius[0] + radius[1]);
-  mjtNum thickness = radius[0] - radius[1];
-  mjtNum dr = mju_sqrt(p[0]*p[0] + p[1]*p[1]) - midpoint;
-  // TODO: correct this
-  mjtNum dy = abs(p[2]) - 0.5;
-  // create the sdf, then 'onion'
-  // return mju_sqrt(q*q + p[2]*p[2]) - radius[1];
-  mjtNum nlobe_sdf = mju_min(mju_max(dr, dy), 0.0) + mju_sqrt(mju_max(dr, 0.0)* mju_max(dr, 0.0) + mju_max(dy, 0.0) * mju_max(dy, 0.0));
-  return abs(nlobe_sdf) - thickness;
+static mjtNum sector(const mjtNum p[2], const mjtNum radius, const mjtNum sector_angle) {
+  // a circle centered at (0, 0), with a sector cut out
+  mjtNum sdf_circle = mju_norm(p, 2) - radius;
+  mjtNum b = mjPI - sector_angle;
+  mjtNum nearest_arc[2] = {-mju_cos(b), mju_sign(p[1]) * mju_sin(b)};
+
+  mju_sub(nearest_arc, nearest_arc, p, 2);
+  mjtNum sdf_segment = - mju_norm(nearest_arc, 2);
+  mjtNum cos_p = p[0] / mju_norm(p, 2);
+  return cos_p > mju_cos(sector_angle) ? sdf_circle : sdf_segment;
 }
 
-static mjtNum distance(const mjtNum p[3], const mjtNum radius[2]) {
-  mjtNum central_ring = ring(p, Ring.Create());
-  return ring(p, radius);
+static mjtNum distance(const mjtNum p[3], const mjtNum attributes[3]) {
+  // lobe is offset by the lobe radius
+
+  // We can use a naive rotation repetition, since the SDFs are just circles.
+  // https://iquilezles.org/articles/sdfrepetition/
+  mjtNum sector_angle = 2 * mjPI / attributes[0];
+  mjtNum an = mju_atan2(p[1], p[0]);
+  mjtNum i = floor(an / sector_angle);
+
+  mjtNum c = sector_angle * i;
+  mjtNum rot[4] = {mju_cos(c), -mju_sin(c), mju_sin(c), mju_cos(c)};
+  mjtNum pxy[2] = {p[0], p[1]};
+
+  // Rotate p into local coordinates
+  mju_mulMatVec(pxy, rot, pxy, 2, 2);
+  mjtNum offset[2] = {1.0, 0.0};
+  mju_sub(pxy, pxy, offset, 2);
+  mjtNum sdf_nlobe_2d = sector(pxy, attributes[1], sector_angle);
+  return Extrude(p, sdf_nlobe_2d, attributes[2]);
 }
+
+static void gradient(mjtNum grad[3], const mjtNum p[3], const mjtNum attributes[3]) {
+}
+
 
 }  // namespace
 
@@ -76,13 +94,7 @@ mjtNum NLobe::Distance(const mjtNum point[3]) const {
 
 // gradient of sdf
 void NLobe::Gradient(mjtNum grad[3], const mjtNum p[3]) const {
-  mjtNum len_xy = mju_sqrt(p[0]*p[0] + p[1]*p[1]);
-  mjtNum q = len_xy - attribute[0];
-  mjtNum grad_q[2] = { p[0] / len_xy, p[1] / len_xy };
-  mjtNum len_qz = mju_sqrt(q*q + p[2]*p[2]);
-  grad[0] = q*grad_q[0] / mjMAX(len_qz, mjMINVAL);
-  grad[1] = q*grad_q[1] / mjMAX(len_qz, mjMINVAL);
-  grad[2] = p[2] / mjMAX(len_qz, mjMINVAL);
+  gradient(grad, p, attribute);
 }
 
 // plugin registration

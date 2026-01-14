@@ -34,15 +34,28 @@ static mjtNum distance(const mjtNum p[3], const mjtNum attributes[3]) {
   return Extrude(p, sdf_ring_2d, attributes[2]);
 }
 
+static void gradient(mjtNum grad[3], const mjtNum p[3], const mjtNum attributes[3]) {
+  mjtNum midpoint = 0.5 * (attributes[0] + attributes[1]);
+  mjtNum thickness = attributes[0] - attributes[1];
+  mjtNum pxy[2] = {p[0], p[1]};
+  mjtNum len_xy = mjMAX(mju_norm(pxy, 2), mjMINVAL);
+  mjtNum sdf_circle = len_xy - midpoint;
+  // set the gradient of the 2d sdf
+  grad[0] = p[0] / len_xy;
+  grad[1] = p[1] / len_xy;
+  grad[2] = 0;
+  mjtNum sdf_ring_2d = gradOnion(grad, sdf_circle, thickness);
+  gradExtrude(grad, p, sdf_ring_2d, attributes[2]);
+}
 }  // namespace
 
 // factory function
 std::optional<Ring> Ring::Create(
     const mjModel* m, mjData* d, int instance) {
-  if (CheckAttr("radius1", m, instance) && CheckAttr("radius2", m, instance)) {
+  if (CheckAttr("outerradius", m, instance) && CheckAttr("innerradius", m, instance) && CheckAttr("height", m, instance)) {
     return Ring(m, d, instance);
   } else {
-    mju_warning("Invalid radius1 or radius2 parameters in Ring plugin");
+    mju_warning("Invalid parameters in Ring plugin");
     return std::nullopt;
   }
 }
@@ -65,13 +78,7 @@ mjtNum Ring::Distance(const mjtNum point[3]) const {
 
 // gradient of sdf
 void Ring::Gradient(mjtNum grad[3], const mjtNum p[3]) const {
-  // mjtNum midpoint = 0.5 * (attributes[0] + attributes[1]);
-  // mjtNum thickness = attributes[0] - attributes[1];
-  // mjtNum pxy[2] = {p[0], p[1]};
-  // mjtNum circle_sdf = mju_norm(pxy, 2) - midpoint;
-  // gradOnion(circle_sdf, grad)
-  
-
+  gradient(grad, p, attribute);
 }
 
 // plugin registration

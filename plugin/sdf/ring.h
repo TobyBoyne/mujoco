@@ -26,7 +26,7 @@ namespace mujoco::plugin::sdf {
 
 struct RingAttribute {
   static constexpr int nattribute = 3;
-  static constexpr char const* names[nattribute] = {"radius1", "radius2", "height"};
+  static constexpr char const* names[nattribute] = {"outerradius", "innerradius", "height"};
   static constexpr mjtNum defaults[nattribute] = { .35, .15, .20};
 };
 
