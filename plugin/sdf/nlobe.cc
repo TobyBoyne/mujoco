@@ -38,6 +38,23 @@ static mjtNum sector(const mjtNum p[2], const mjtNum radius, const mjtNum sector
   return cos_p > mju_cos(sector_angle) ? sdf_circle : sdf_segment;
 }
 
+static mjtNum gradSector(mjtNum grad[3], const mjtNum p[2], const mjtNum radius, const mjtNum sector_angle) {
+  mjtNum sdf_circle = mju_norm(p, 2) - radius;
+  mjtNum b = mjPI - sector_angle;
+  mjtNum nearest_arc[2] = {-mju_cos(b), mju_sign(p[1]) * mju_sin(b)};
+
+  mju_sub(nearest_arc, nearest_arc, p, 2);
+  mjtNum len_xy = mjMAX(mju_norm(p, 2), mjMINVAL);
+  mjtNum sdf_segment = - mjMAX(mju_norm(nearest_arc, 2), mjMINVAL);
+  mjtNum cos_p = p[0] / len_xy;
+
+  bool in_circle = cos_p > mju_cos(sector_angle);
+  grad[0] = in_circle ? p[0] / len_xy : nearest_arc[0] / abs(sdf_segment);
+  grad[1] = in_circle ? p[1] / len_xy : nearest_arc[1] / abs(sdf_segment);
+
+  return in_circle ? sdf_circle : sdf_segment;
+}
+
 static mjtNum distance(const mjtNum p[3], const mjtNum attributes[3]) {
   // lobe is offset by the lobe radius
 
@@ -45,21 +62,39 @@ static mjtNum distance(const mjtNum p[3], const mjtNum attributes[3]) {
   // https://iquilezles.org/articles/sdfrepetition/
   mjtNum sector_angle = 2 * mjPI / attributes[0];
   mjtNum an = mju_atan2(p[1], p[0]);
-  mjtNum i = floor(an / sector_angle);
+  mjtNum i = round(an / sector_angle);
 
   mjtNum c = sector_angle * i;
-  mjtNum rot[4] = {mju_cos(c), -mju_sin(c), mju_sin(c), mju_cos(c)};
+  // rot is a clockwise rotation
+  mjtNum rot[4] = {mju_cos(c), mju_sin(c), -mju_sin(c), mju_cos(c)};
   mjtNum pxy[2] = {p[0], p[1]};
 
   // Rotate p into local coordinates
   mju_mulMatVec(pxy, rot, pxy, 2, 2);
-  mjtNum offset[2] = {1.0, 0.0};
+  mjtNum offset[2] = {attributes[1], 0.0};
   mju_sub(pxy, pxy, offset, 2);
   mjtNum sdf_nlobe_2d = sector(pxy, attributes[1], sector_angle);
   return Extrude(p, sdf_nlobe_2d, attributes[2]);
 }
 
 static void gradient(mjtNum grad[3], const mjtNum p[3], const mjtNum attributes[3]) {
+  mjtNum sector_angle = 2 * mjPI / attributes[0];
+  mjtNum an = mju_atan2(p[1], p[0]);
+  mjtNum i = round(an / sector_angle);
+
+  mjtNum c = sector_angle * i;
+  mjtNum rot[4] = {mju_cos(c), mju_sin(c), -mju_sin(c), mju_cos(c)};
+  mjtNum pxy[2] = {p[0], p[1]};
+
+  // Rotate p into local coordinates
+  mju_mulMatVec(pxy, rot, pxy, 2, 2);
+  mjtNum offset[2] = {attributes[1], 0.0};
+  mju_sub(pxy, pxy, offset, 2);
+  mjtNum sdf_nlobe_2d = gradSector(grad, pxy, attributes[1], sector_angle);
+  // We now need to rotate the gradient back to global coordinates
+  // Invert the rotation matrix by taking the transpose
+  mju_mulMatTVec(grad, rot, grad, 2, 2);
+  gradExtrude(grad, p, sdf_nlobe_2d, attributes[2]);
 }
 
 
