@@ -27,7 +27,7 @@ namespace {
 
 static mjtNum distance(const mjtNum p[3], const mjtNum attributes[3]) {
   mjtNum midpoint = 0.5 * (attributes[0] + attributes[1]);
-  mjtNum thickness = attributes[0] - attributes[1];
+  mjtNum thickness = 0.5 * (attributes[0] - attributes[1]);
   mjtNum pxy[2] = {p[0], p[1]};
   mjtNum sdf_circle = mju_norm(pxy, 2) - midpoint;
   mjtNum sdf_ring_2d = Onion(sdf_circle, thickness);
@@ -36,7 +36,7 @@ static mjtNum distance(const mjtNum p[3], const mjtNum attributes[3]) {
 
 static void gradient(mjtNum grad[3], const mjtNum p[3], const mjtNum attributes[3]) {
   mjtNum midpoint = 0.5 * (attributes[0] + attributes[1]);
-  mjtNum thickness = attributes[0] - attributes[1];
+  mjtNum thickness = 0.5 * (attributes[0] - attributes[1]);
   mjtNum pxy[2] = {p[0], p[1]};
   mjtNum len_xy = mjMAX(mju_norm(pxy, 2), mjMINVAL);
   mjtNum sdf_circle = len_xy - midpoint;
@@ -131,7 +131,7 @@ void Ring::RegisterPlugin() {
   plugin.sdf_aabb =
       +[](mjtNum aabb[6], const mjtNum* attributes) {
         aabb[0] = aabb[1] = aabb[2] = 0;
-        aabb[3] = aabb[4] = attributes[1];
+        aabb[3] = aabb[4] = attributes[0];
         aabb[5] = attributes[2] / 2.0;
       };
   plugin.sdf_attribute =

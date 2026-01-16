@@ -53,8 +53,8 @@ inline mjtNum gradOnion(mjtNum grad[3], mjtNum S, mjtNum t) {
 
 inline mjtNum Extrude(const mjtNum p[3], mjtNum S, mjtNum h) {
     mjtNum w[2] = { S, abs(p[2]) - 0.5 * h };
-    mjtNum w_abs[2] = { mju_max(w[0], 0), mju_max(w[1], 0) };
-    return mju_min(mju_max(w[0], w[1]), 0.) + mju_norm(w_abs, 2);
+    mjtNum w_abs[2] = { mju_max(w[0], 0.0), mju_max(w[1], 0.0) };
+    return mju_min(mju_max(w[0], w[1]), 0.0) + mju_norm(w_abs, 2);
 }
 
 inline mjtNum gradExtrude(mjtNum grad[3], const mjtNum p[3], mjtNum S, mjtNum h) {

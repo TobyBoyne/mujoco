@@ -36,14 +36,14 @@ static mjtNum sector(const mjtNum p[2], const mjtNum radius, const mjtNum sector
   mju_sub(nearest_arc, nearest_arc, p, 2);
   
   mjtNum sdf_segment = - mju_norm(nearest_arc, 2);
-  mjtNum cos_p = p[0] / mju_norm(p, 2);
+  mjtNum cos_p = p[0] / mjMAX(mju_norm(p, 2), mjMINVAL);
   return cos_p > mju_cos(sector_angle) ? sdf_circle : sdf_segment;
 }
 
 static mjtNum gradSector(mjtNum grad[3], const mjtNum p[2], const mjtNum radius, const mjtNum sector_angle) {
   mjtNum sdf_circle = mju_norm(p, 2) - radius;
   mjtNum b = mjPI - sector_angle;
-  mjtNum nearest_arc[2] = {-mju_cos(b), mju_sign(p[1]) * mju_sin(b)};
+  mjtNum nearest_arc[2] = {-mju_cos(b), p[1] > 0.0 ? mju_sin(b) : - mju_sin(b)};
 
   mju_sub(nearest_arc, nearest_arc, p, 2);
   mjtNum len_xy = mjMAX(mju_norm(p, 2), mjMINVAL);
@@ -72,10 +72,11 @@ static mjtNum distance(const mjtNum p[3], const mjtNum attributes[3]) {
   mjtNum pxy[2] = {p[0], p[1]};
 
   // Rotate p into local coordinates
-  mju_mulMatVec(pxy, rot, pxy, 2, 2);
+  mjtNum pxy_rot[2];
+  mju_mulMatVec(pxy_rot, rot, pxy, 2, 2);
   mjtNum offset[2] = {attributes[1], 0.0};
-  mju_sub(pxy, pxy, offset, 2);
-  mjtNum sdf_nlobe_2d = sector(pxy, attributes[1], sector_angle);
+  mju_sub(pxy_rot, pxy_rot, offset, 2);
+  mjtNum sdf_nlobe_2d = sector(pxy_rot, attributes[1], sector_angle);
   return Extrude(p, sdf_nlobe_2d, attributes[2]);
 }
 
@@ -89,13 +90,15 @@ static void gradient(mjtNum grad[3], const mjtNum p[3], const mjtNum attributes[
   mjtNum pxy[2] = {p[0], p[1]};
 
   // Rotate p into local coordinates
-  mju_mulMatVec(pxy, rot, pxy, 2, 2);
+  mjtNum pxy_rot[2];
+  mju_mulMatVec(pxy_rot, rot, pxy, 2, 2);
   mjtNum offset[2] = {attributes[1], 0.0};
-  mju_sub(pxy, pxy, offset, 2);
-  mjtNum sdf_nlobe_2d = gradSector(grad, pxy, attributes[1], sector_angle);
+  mju_sub(pxy_rot, pxy_rot, offset, 2);
+  mjtNum grad_rot[2];
+  mjtNum sdf_nlobe_2d = gradSector(grad_rot, pxy_rot, attributes[1], sector_angle);
   // We now need to rotate the gradient back to global coordinates
   // Invert the rotation matrix by taking the transpose
-  mju_mulMatTVec(grad, rot, grad, 2, 2);
+  mju_mulMatTVec(grad, rot, grad_rot, 2, 2);
   gradExtrude(grad, p, sdf_nlobe_2d, attributes[2]);
 }
 
