@@ -27,7 +27,7 @@ namespace mujoco::plugin::sdf {
 struct NLobeAttribute {
   static constexpr int nattribute = 3;
   static constexpr char const* names[nattribute] = {"nlobes", "loberadius", "height"};
-  static constexpr mjtNum defaults[nattribute] = { .35, .15, .20};
+  static constexpr mjtNum defaults[nattribute] = { 3.0, .15, .20};
 };
 
 class NLobe {

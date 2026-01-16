@@ -131,8 +131,8 @@ void Ring::RegisterPlugin() {
   plugin.sdf_aabb =
       +[](mjtNum aabb[6], const mjtNum* attributes) {
         aabb[0] = aabb[1] = aabb[2] = 0;
-        aabb[3] = aabb[4] = attributes[0] + attributes[1];
-        aabb[5] = attributes[1];
+        aabb[3] = aabb[4] = attributes[1];
+        aabb[5] = attributes[2] / 2.0;
       };
   plugin.sdf_attribute =
       +[](mjtNum attribute[], const char* name[], const char* value[]) {

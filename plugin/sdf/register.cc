@@ -15,6 +15,7 @@
 #include "bolt.h"
 #include "bowl.h"
 #include "gear.h"
+#include "nlobe.h"
 #include "nut.h"
 #include "ring.h"
 #include "torus.h"
@@ -25,6 +26,7 @@ mjPLUGIN_LIB_INIT {
   Bolt::RegisterPlugin();
   Bowl::RegisterPlugin();
   Gear::RegisterPlugin();
+  NLobe::RegisterPlugin();
   Nut::RegisterPlugin();
   Ring::RegisterPlugin();
   Torus::RegisterPlugin();

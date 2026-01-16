@@ -20,7 +20,6 @@
 #include <mujoco/mjtnum.h>
 #include <mujoco/mujoco.h>
 #include "sdf.h"
-#include "ring.h"
 #include "nlobe.h"
 
 namespace mujoco::plugin::sdf {
@@ -30,9 +29,12 @@ static mjtNum sector(const mjtNum p[2], const mjtNum radius, const mjtNum sector
   // a circle centered at (0, 0), with a sector cut out
   mjtNum sdf_circle = mju_norm(p, 2) - radius;
   mjtNum b = mjPI - sector_angle;
-  mjtNum nearest_arc[2] = {-mju_cos(b), mju_sign(p[1]) * mju_sin(b)};
+  // don't use mju_sign here to avoid issues when p.y == 0
+  mjtNum nearest_arc[2] = {-mju_cos(b), p[1] > 0.0 ? mju_sin(b) : - mju_sin(b)};
 
+  mju_scl(nearest_arc, nearest_arc, radius, 2);
   mju_sub(nearest_arc, nearest_arc, p, 2);
+  
   mjtNum sdf_segment = - mju_norm(nearest_arc, 2);
   mjtNum cos_p = p[0] / mju_norm(p, 2);
   return cos_p > mju_cos(sector_angle) ? sdf_circle : sdf_segment;
@@ -103,10 +105,10 @@ static void gradient(mjtNum grad[3], const mjtNum p[3], const mjtNum attributes[
 // factory function
 std::optional<NLobe> NLobe::Create(
     const mjModel* m, mjData* d, int instance) {
-  if (CheckAttr("radius1", m, instance) && CheckAttr("radius2", m, instance)) {
+  if (CheckAttr("nlobes", m, instance) && CheckAttr("loberadius", m, instance) && CheckAttr("height", m, instance)) {
     return NLobe(m, d, instance);
   } else {
-    mju_warning("Invalid radius1 or radius2 parameters in NLobe plugin");
+    mju_warning("Invalid parameters in NLobe plugin");
     return std::nullopt;
   }
 }
@@ -182,8 +184,8 @@ void NLobe::RegisterPlugin() {
   plugin.sdf_aabb =
       +[](mjtNum aabb[6], const mjtNum* attributes) {
         aabb[0] = aabb[1] = aabb[2] = 0;
-        aabb[3] = aabb[4] = attributes[0] + attributes[1];
-        aabb[5] = attributes[1];
+        aabb[3] = aabb[4] = 2 * attributes[1];
+        aabb[5] = attributes[2] / 2.0;
       };
   plugin.sdf_attribute =
       +[](mjtNum attribute[], const char* name[], const char* value[]) {

@@ -26,6 +26,8 @@ set(MUJOCO_SDF_SRCS
     gear.cc
     gear.h
     register.cc
+    nlobe.cc
+    nlobe.h
     nut.cc
     nut.h
     ring.cc
